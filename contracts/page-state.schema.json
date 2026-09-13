@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-arora.local/contracts/page-state.schema.json",
+  "title": "PageState",
+  "description": "Raw browser page state produced by Member 1 and consumed only by Member 2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "page_state_id",
+    "captured_at",
+    "url",
+    "title",
+    "visible_text",
+    "elements"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "shared.schema.json#/$defs/schemaVersion" },
+    "page_state_id": {
+      "type": "string",
+      "pattern": "^PS_[A-Za-z0-9_-]{6,64}$"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "url": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "visible_text": {
+      "type": "string",
+      "maxLength": 20000,
+      "description": "Raw visible text needed by Member 2 for privacy detection and sanitization."
+    },
+    "elements": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["element_id", "role", "visible", "enabled"],
+        "properties": {
+          "element_id": { "$ref": "shared.schema.json#/$defs/opaqueElementId" },
+          "role": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "type": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "value": {
+            "type": ["string", "null"],
+            "maxLength": 2000,
+            "description": "Raw field value when needed for privacy detection. Password values, cookies, tokens, and browser credentials must never be captured."
+          },
+          "visible": { "type": "boolean" },
+          "enabled": { "type": "boolean" },
+          "bounds": { "$ref": "shared.schema.json#/$defs/bounds" }
+        }
+      }
+    },
+    "accessibility_snapshot": {
+      "type": "string",
+      "maxLength": 20000
+    },
+    "visual_summary": {
+      "type": "string",
+      "maxLength": 5000
+    },
+    "error": { "$ref": "shared.schema.json#/$defs/errorDetail" }
+  }
+}

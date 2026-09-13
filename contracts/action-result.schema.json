@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-arora.local/contracts/action-result.schema.json",
+  "title": "ActionResult",
+  "description": "Browser execution result produced by Member 1 and consumed by Member 3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "action_plan_id",
+    "action_id",
+    "completed_at",
+    "status",
+    "observed_change",
+    "needs_fresh_page_state"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "shared.schema.json#/$defs/schemaVersion" },
+    "action_plan_id": {
+      "type": "string",
+      "pattern": "^AP_[A-Za-z0-9_-]{6,64}$"
+    },
+    "action_id": {
+      "type": "string",
+      "pattern": "^ACT_[A-Za-z0-9_-]{6,64}$"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "SUCCESS",
+        "STALE_ELEMENT",
+        "INVALID_ACTION",
+        "EXECUTION_FAILED",
+        "BLOCKED_BY_POLICY",
+        "NEEDS_OBSERVATION",
+        "TIMEOUT"
+      ]
+    },
+    "observed_change": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "Sanitized description of the visible browser result."
+    },
+    "needs_fresh_page_state": {
+      "type": "boolean"
+    },
+    "error": { "$ref": "shared.schema.json#/$defs/errorDetail" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": ["STALE_ELEMENT", "INVALID_ACTION", "EXECUTION_FAILED", "BLOCKED_BY_POLICY", "TIMEOUT"]
+          }
+        },
+        "required": ["status"]
+      },
+      "then": { "required": ["error"] }
+    }
+  ]
+}

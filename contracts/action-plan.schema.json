@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-arora.local/contracts/action-plan.schema.json",
+  "title": "ActionPlan",
+  "description": "Structured, machine-validatable action plan produced by Member 3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "action_plan_id",
+    "source_sanitized_state_id",
+    "created_at",
+    "intent",
+    "actions"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "shared.schema.json#/$defs/schemaVersion" },
+    "action_plan_id": {
+      "type": "string",
+      "pattern": "^AP_[A-Za-z0-9_-]{6,64}$"
+    },
+    "source_sanitized_state_id": {
+      "type": "string",
+      "pattern": "^SPS_[A-Za-z0-9_-]{6,64}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "intent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_id", "action_type", "reason", "risk_level"],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "pattern": "^ACT_[A-Za-z0-9_-]{6,64}$"
+          },
+          "action_type": { "$ref": "shared.schema.json#/$defs/actionType" },
+          "target_element_id": { "$ref": "shared.schema.json#/$defs/opaqueElementId" },
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "value"],
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": ["USER_TASK", "SAFE_LITERAL", "PLACEHOLDER"]
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            }
+          },
+          "select": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["option"],
+            "properties": {
+              "option": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          },
+          "key": {
+            "type": "string",
+            "enum": ["ENTER", "TAB", "ESCAPE", "ARROW_UP", "ARROW_DOWN", "ARROW_LEFT", "ARROW_RIGHT"]
+          },
+          "scroll": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["direction"],
+            "properties": {
+              "direction": {
+                "type": "string",
+                "enum": ["UP", "DOWN", "LEFT", "RIGHT"]
+              },
+              "amount": {
+                "type": "string",
+                "enum": ["SMALL", "MEDIUM", "LARGE"]
+              }
+            }
+          },
+          "wait_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 5000
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "risk_level": { "$ref": "shared.schema.json#/$defs/riskLevel" },
+          "requires_user_confirmation": {
+            "type": "boolean"
+          }
+        },
+        "oneOf": [
+          {
+            "properties": { "action_type": { "const": "CLICK" } },
+            "required": ["action_type", "target_element_id"],
+            "not": { "anyOf": [
+              { "required": ["input"] },
+              { "required": ["select"] },
+              { "required": ["key"] },
+              { "required": ["scroll"] },
+              { "required": ["wait_ms"] }
+            ] }
+          },
+          {
+            "properties": { "action_type": { "const": "TYPE" } },
+            "required": ["action_type", "target_element_id", "input"],
+            "not": { "anyOf": [
+              { "required": ["select"] },
+              { "required": ["key"] },
+              { "required": ["scroll"] },
+              { "required": ["wait_ms"] }
+            ] }
+          },
+          {
+            "properties": { "action_type": { "const": "SELECT" } },
+            "required": ["action_type", "target_element_id", "select"],
+            "not": { "anyOf": [
+              { "required": ["input"] },
+              { "required": ["key"] },
+              { "required": ["scroll"] },
+              { "required": ["wait_ms"] }
+            ] }
+          },
+          {
+            "properties": { "action_type": { "const": "PRESS_KEY" } },
+            "required": ["action_type", "key"],
+            "not": { "anyOf": [
+              { "required": ["target_element_id"] },
+              { "required": ["input"] },
+              { "required": ["select"] },
+              { "required": ["scroll"] },
+              { "required": ["wait_ms"] }
+            ] }
+          },
+          {
+            "properties": { "action_type": { "const": "SCROLL" } },
+            "required": ["action_type", "scroll"],
+            "not": { "anyOf": [
+              { "required": ["target_element_id"] },
+              { "required": ["input"] },
+              { "required": ["select"] },
+              { "required": ["key"] },
+              { "required": ["wait_ms"] }
+            ] }
+          },
+          {
+            "properties": { "action_type": { "const": "WAIT" } },
+            "required": ["action_type", "wait_ms"],
+            "not": { "anyOf": [
+              { "required": ["target_element_id"] },
+              { "required": ["input"] },
+              { "required": ["select"] },
+              { "required": ["key"] },
+              { "required": ["scroll"] }
+            ] }
+          }
+        ]
+      }
+    },
+    "error": { "$ref": "shared.schema.json#/$defs/errorDetail" }
+  }
+}
