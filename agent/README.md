@@ -6,7 +6,8 @@ This is the initial Member 3 foundation. It does not call a model or browser.
 
 `Agent.create_plan(user_task, sanitized_page_state)` runs these stages:
 
-1. Validate and copy the User Task and `SanitizedPageState` into a limited context.
+1. Validate and copy the User Task and `SanitizedPageState` into a limited context with
+	compact, deterministic agent and security instructions.
 2. Call the injected `ReasoningAdapter`.
 3. Parse the adapter's JSON object output.
 4. Validate the output with `contracts/action-plan.schema.json`.
@@ -19,6 +20,6 @@ targets to exist in the current sanitized state, and rejects executable content,
 selectors, URLs, shell commands, and obvious raw sensitive literals. It is
 deterministic and does not execute actions.
 
-`StubReasoningAdapter` is the default deterministic adapter. A future provider should implement `generate(context)` and return one candidate ActionPlan as JSON or an object. The adapter receives only `user_task` and `sanitized_page_state`.
+`StubReasoningAdapter` is the default deterministic adapter. A future provider should implement `generate(context)` and return one candidate ActionPlan as JSON or an object. The adapter receives only `user_task`, `sanitized_page_state`, and the compact `instructions` field. Raw `PageState` and placeholder-to-original mappings cannot enter this context.
 
 The module never receives raw `PageState`, stores placeholder mappings, executes browser actions, or includes model output in failure details.
