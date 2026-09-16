@@ -1,3 +1,4 @@
+import json
 import re
 import secrets
 from urllib.parse import urlsplit, urlunsplit
@@ -114,7 +115,7 @@ class PrivacyTokenizer:
                         matches.append((start, end, cat))
                     break
 
-        matches.sort(key=lambda item: (item[0], item[1], self.CATEGORY_ORDER.index(item[2]) if item[2] in self.CATEGORY_ORDER else 99))
+        matches.sort(key=lambda item: (item[0], item[1], self.CATEGORY_ORDER.index(item[2])))
         selected: List[Tuple[int, int, str]] = []
         for candidate in matches:
             if selected and candidate[0] < selected[-1][1]:
@@ -169,13 +170,12 @@ class PrivacyTokenizer:
             sanitized_label, modified = self.sanitize_node(raw_label, hint)
             sanitized["label"] = sanitized_label
             if modified:
-                matches = self._span_matches(raw_label, hint)
-                redaction_count += len(matches)
-                for _, _, category in matches:
+                for _, _, category in self._span_matches(raw_label, hint):
                     upper = category.upper()
                     if upper not in categories:
                         categories.append(upper)
-                    token = self._generate_token(category, raw_label[_: _]) if False else None
+                    redaction_count += 1
+                placeholders.extend(token for token in self.token_map if token in sanitized_label and token not in placeholders)
 
         for field_name in ("text", "value"):
             if field_name not in sanitized or sanitized[field_name] is None:
@@ -201,7 +201,7 @@ class PrivacyTokenizer:
 
         if redaction_count:
             sanitized["sensitivity"] = "REDACTED"
-            if len(placeholders) == 1 and (sanitized.get("text") == placeholders[0] or sanitized.get("value") == placeholders[0] or sanitized.get("label") == placeholders[0]):
+            if len(placeholders) == 1 and any(sanitized.get(field) == placeholders[0] for field in ("label", "text", "value")):
                 sanitized["redaction_placeholder"] = placeholders[0]
         elif "MESSAGE" in categories:
             sanitized["sensitivity"] = "SENSITIVE_CONTEXT"
@@ -219,16 +219,17 @@ class PrivacyTokenizer:
             if not parts.scheme or not parts.netloc:
                 sanitized, _ = self.sanitize_node(value)
                 return sanitized[:2048]
+            hostname = parts.hostname or ""
+            port = f":{parts.port}" if parts.port else ""
             path, _ = self.sanitize_node(parts.path)
-            return urlunsplit((parts.scheme, parts.netloc, path, "", ""))[:2048]
+            return urlunsplit((parts.scheme, hostname + port, path, "", ""))[:2048]
         except ValueError:
             sanitized, _ = self.sanitize_node(value)
             return sanitized[:2048]
 
     def _sanitize_recursive(self, value: Any) -> Any:
         if isinstance(value, str):
-            sanitized, _ = self.sanitize_node(value)
-            return sanitized
+            return self.sanitize_node(value)[0]
         if isinstance(value, dict):
             return {key: self._sanitize_recursive(child) for key, child in value.items()}
         if isinstance(value, list):
@@ -255,9 +256,7 @@ class PrivacyTokenizer:
             for category in categories:
                 if category not in categories_seen:
                     categories_seen.append(category)
-            if sanitized_element["sensitivity"] == "SENSITIVE_CONTEXT":
-                sensitive_context_detected = True
-            if "MESSAGE" in categories:
+            if sanitized_element["sensitivity"] == "SENSITIVE_CONTEXT" or "MESSAGE" in categories:
                 sensitive_context_detected = True
 
         raw_visible_text = str(page_state.get("visible_text", ""))
@@ -279,7 +278,7 @@ class PrivacyTokenizer:
             "sanitized_state_id": self._new_sanitized_state_id(),
             "source_page_state_id": page_state["page_state_id"],
             "captured_at": page_state["captured_at"],
-            "url": self._sanitize_url(str(page_state["url"])) if page_state.get("url") else "",
+            "url": self._sanitize_url(str(page_state["url"])),
             "title": self.sanitize_node(str(page_state.get("title", "")))[0],
             "visible_text": sanitized_visible_text,
             "elements": sanitized_elements,
@@ -301,10 +300,6 @@ class PrivacyTokenizer:
         return sanitized_state
 
     def _verify_no_original_values(self, sanitized_state_values: Dict[str, Any]) -> bool:
-        serialized = json.dumps(sanitized_state_values, ensure_ascii=False) if False else None
-        # This method is retained as a local defensive check. The PrivacyEngine
-        # performs the independent raw-input verification.
-        import json
         payload = json.dumps(sanitized_state_values, ensure_ascii=False)
         return all(raw_value not in payload for raw_value in self.token_map.values())
 
