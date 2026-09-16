@@ -29,7 +29,28 @@ class PrivacyDetector:
         "message": [
             "private conversation", "confidential", "don't tell anyone",
             "verification details", "reply to me privately", "send the bank details"
-        ]
+        ],
+        "financial": [
+            "bank account", "banking details", "credit card", "debit card", "transaction history",
+            "transaction details", "payment details", "routing number", "wire transfer", "salary",
+            "tax return", "investment portfolio"
+        ],
+        "medical": [
+            "medical record", "diagnosis", "prescription", "medication", "symptoms",
+            "patient", "health insurance", "blood type", "lab result"
+        ],
+        "authentication": [
+            "sign in credentials", "log in credentials", "login credentials", "verification code", "security answer",
+            "api key", "auth token", "passcode", "recovery code", "two-factor"
+        ],
+        "private_communication": [
+            "private conversation", "direct message", "personal message", "reply privately",
+            "do not share this", "don't tell anyone"
+        ],
+        "confidential": [
+            "confidential", "internal use only", "proprietary", "trade secret",
+            "restricted information", "do not distribute", "under nda"
+        ],
     }
 
     NEGATIVE_CONTEXTS = {
@@ -136,6 +157,26 @@ class PrivacyDetector:
         clean_lower = text.lower()
         return any(keyword in clean_lower for keyword in self.CONTEXT_KEYWORDS["message"])
 
+    def detect_sensitive_context(self, text: str, category: str) -> bool:
+        """Detect a small, explicit set of high-risk context phrases."""
+        clean_lower = text.lower()
+        return any(keyword in clean_lower for keyword in self.CONTEXT_KEYWORDS.get(category, []))
+
+    def detect_financial(self, text: str) -> bool:
+        return self.detect_sensitive_context(text, "financial")
+
+    def detect_medical(self, text: str) -> bool:
+        return self.detect_sensitive_context(text, "medical")
+
+    def detect_authentication(self, text: str) -> bool:
+        return self.detect_sensitive_context(text, "authentication")
+
+    def detect_private_communication(self, text: str) -> bool:
+        return self.detect_sensitive_context(text, "private_communication")
+
+    def detect_confidential(self, text: str) -> bool:
+        return self.detect_sensitive_context(text, "confidential")
+
 
 def evaluate_item(category: str, text: str) -> bool:
     detector = PrivacyDetector()
@@ -150,6 +191,11 @@ def evaluate_item(category: str, text: str) -> bool:
         "payment": detector.detect_payment,
         "account": detector.detect_account,
         "message": detector.detect_message,
+        "financial": detector.detect_financial,
+        "medical": detector.detect_medical,
+        "authentication": detector.detect_authentication,
+        "private_communication": detector.detect_private_communication,
+        "confidential": detector.detect_confidential,
     }
 
     handler = method_map.get(category.lower())

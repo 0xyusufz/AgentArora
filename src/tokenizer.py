@@ -10,12 +10,14 @@ class PrivacyTokenizer:
     """Sanitize PageState into Agent-safe structural placeholders."""
 
     CATEGORY_ORDER = (
-        "email", "phone", "password", "ssn", "pan", "account", "payment", "address", "name", "message"
+        "email", "phone", "password", "ssn", "pan", "account", "payment", "address", "name",
+        "message", "financial", "medical", "authentication", "private_communication", "confidential"
     )
 
     TOKEN_PREFIXES = {
         "EMAIL": "EMAIL", "PHONE": "PHONE", "NAME": "PERSON", "ADDRESS": "ADDRESS",
         "PASSWORD": "PASSWORD", "SSN": "SSN", "PAN": "PAN", "PAYMENT": "PAYMENT", "ACCOUNT": "ACCOUNT", "MESSAGE": "MESSAGE",
+        "FINANCIAL": "FINANCIAL", "MEDICAL": "MEDICAL", "AUTHENTICATION": "AUTH", "PRIVATE_COMMUNICATION": "PRIVATE", "CONFIDENTIAL": "CONFIDENTIAL",
     }
 
     EMAIL_SPAN_REGEX = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
@@ -34,9 +36,32 @@ class PrivacyTokenizer:
         r"verification\s+details|reply\s+to\s+me\s+privately|send\s+the\s+bank\s+details",
         re.IGNORECASE,
     )
+    SENSITIVE_CONTEXT_SPAN_REGEXES = {
+        "financial": re.compile(
+            r"bank\s+account|banking\s+details|credit\s+card|debit\s+card|"
+            r"transaction\s+(?:history|details)|payment\s+details|routing\s+number|"
+            r"wire\s+transfer|salary|tax\s+return|investment\s+portfolio", re.IGNORECASE
+        ),
+        "medical": re.compile(
+            r"medical\s+record|diagnosis|prescription|medication|symptoms?|patient|"
+            r"health\s+insurance|blood\s+type|lab\s+result", re.IGNORECASE
+        ),
+        "authentication": re.compile(
+            r"sign\s+in\s+credentials|log\s+in\s+credentials|login\s+credentials|verification\s+code|security\s+answer|"
+            r"api\s+key|auth\s+token|passcode|recovery\s+code|two-factor", re.IGNORECASE
+        ),
+        "private_communication": re.compile(
+            r"private\s+conversation|direct\s+message|personal\s+message|reply\s+privately|"
+            r"do\s+not\s+share\s+this|don't\s+tell\s+anyone", re.IGNORECASE
+        ),
+        "confidential": re.compile(
+            r"confidential|internal\s+use\s+only|proprietary|trade\s+secret|"
+            r"restricted\s+information|do\s+not\s+distribute|under\s+nda", re.IGNORECASE
+        ),
+    }
 
     CONTEXT_PATTERNS = {
-        "name": re.compile(r"(?i)\b(?:customer|contact|account\s+holder|full\s+name|name)\s*[:=-]?\s*(?P<value>[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})"),
+        "name": re.compile(r"(?i)\b(?:customer|contact|account\s+holder|full\s+name|name|patient)\s*[:=-]?\s*(?P<value>[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})"),
         "account": re.compile(r"(?i)\b(?:account\s*(?:no\.?|number)?|a/c\s*no\.?)\s*[:=-]?\s*(?P<value>(?:\d[\s-]?){9,11}\d)"),
         "payment": re.compile(r"(?i)\b(?:amount|balance)\s*[:=-]\s*(?P<value>(?:₹|Rs\.?|INR)\s*[\d,]+(?:\.\d{2})?)"),
         "ssn": re.compile(r"(?i)\b(?:ssn|social\s+security(?:\s+number)?)\s*[:=-]?\s*(?P<value>\d{3}[- ]?\d{2}[- ]?\d{4})"),
@@ -44,6 +69,7 @@ class PrivacyTokenizer:
         "password": re.compile(r"(?i)\b(?:password|enter\s+password|current\s+password|new\s+password|confirm\s+password|otp)\s*[:=-]?\s*(?P<value>\S+)"),
         "email": re.compile(r"(?i)\b(?:email|e-mail)\s*[:=-]\s*(?P<value>[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})"),
         "phone": re.compile(r"(?i)\b(?:phone|mobile|contact)\s*(?:number|no\.?)?\s*[:=-]\s*(?P<value>(?:\+?91[\-\s]?)?[6-9]\d{4}[\-\s]?\d{5})"),
+        "medical": re.compile(r"(?i)\b(?:diagnosis|prescription|medication|symptoms?|blood\s+type|lab\s+result)\s*[:=-]\s*(?P<value>[^|\n]+)"),
     }
 
     MAX_ELEMENTS = 500
@@ -92,7 +118,7 @@ class PrivacyTokenizer:
             if pattern:
                 for match in pattern.finditer(text):
                     value = match.group("value")
-                    detected_value = match.group(0) if cat == "password" else value
+                    detected_value = match.group(0) if cat in {"password", "medical"} else value
                     if self._detected(cat, detected_value):
                         matches.append((match.start("value"), match.end("value"), cat))
 
@@ -108,6 +134,7 @@ class PrivacyTokenizer:
             "address": self.ADDRESS_SPAN_REGEX,
             "message": self.MESSAGE_SPAN_REGEX,
         }
+        generic_patterns.update(self.SENSITIVE_CONTEXT_SPAN_REGEXES)
         for cat in categories:
             pattern = generic_patterns.get(cat)
             if not pattern:
@@ -225,14 +252,15 @@ class PrivacyTokenizer:
                 placeholders.extend(token for token in self.token_map if token in sanitized_text and token not in placeholders)
 
         context_text = " ".join(str(element.get(field, "") or "") for field in ("label", "text", "value"))
-        if self.detector.detect_message(context_text) and "MESSAGE" not in categories:
-            categories.append("MESSAGE")
+        for category in ("message", "financial", "medical", "authentication", "private_communication", "confidential"):
+            if self._detected(category, context_text) and category.upper() not in categories:
+                categories.append(category.upper())
 
         if redaction_count:
             sanitized["sensitivity"] = "REDACTED"
             if len(placeholders) == 1 and any(sanitized.get(field) == placeholders[0] for field in ("label", "text", "value")):
                 sanitized["redaction_placeholder"] = placeholders[0]
-        elif "MESSAGE" in categories:
+        elif categories:
             sanitized["sensitivity"] = "SENSITIVE_CONTEXT"
         else:
             sanitized["sensitivity"] = "NONE"
@@ -304,7 +332,7 @@ class PrivacyTokenizer:
             for category in categories:
                 if category not in categories_seen:
                     categories_seen.append(category)
-            if sanitized_element["sensitivity"] == "SENSITIVE_CONTEXT" or "MESSAGE" in categories:
+            if sanitized_element["sensitivity"] == "SENSITIVE_CONTEXT" or categories:
                 sensitive_context_detected = True
 
         raw_title = page_state["title"]
@@ -325,10 +353,12 @@ class PrivacyTokenizer:
                 upper = category.upper()
                 if upper not in categories_seen:
                     categories_seen.append(upper)
-        if self.detector.detect_message(raw_visible_text):
-            sensitive_context_detected = True
-            if "MESSAGE" not in categories_seen:
-                categories_seen.append("MESSAGE")
+        for category in ("message", "financial", "medical", "authentication", "private_communication", "confidential"):
+            if self._detected(category, raw_visible_text):
+                sensitive_context_detected = True
+                upper = category.upper()
+                if upper not in categories_seen:
+                    categories_seen.append(upper)
 
         sanitized_state = {
             "schema_version": page_state["schema_version"],

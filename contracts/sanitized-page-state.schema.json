@@ -101,7 +101,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["EMAIL", "PHONE", "ADDRESS", "PASSWORD", "PAYMENT", "NAME", "ACCOUNT", "MESSAGE", "OTHER"]
+            "enum": ["EMAIL", "PHONE", "ADDRESS", "PASSWORD", "PAYMENT", "NAME", "ACCOUNT", "MESSAGE", "FINANCIAL", "MEDICAL", "AUTHENTICATION", "PRIVATE_COMMUNICATION", "CONFIDENTIAL", "OTHER"]
           }
         },
         "verification_passed": { "type": "boolean" }
