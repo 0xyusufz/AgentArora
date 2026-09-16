@@ -38,7 +38,13 @@ PLACEHOLDER = re.compile(r"^\[[A-Z0-9_]+(?:_[0-9]+)?\]$")
 
 
 class ActionPolicy:
-    """Deterministic Day 1 policy applied after ActionPlan schema validation."""
+    """Deterministic action policy applied after ActionPlan schema validation."""
+
+    def __init__(self, risk_classifier=None):
+        if risk_classifier is None:
+            from .risk_policy import classify_action
+            risk_classifier = classify_action
+        self._risk_classifier = risk_classifier
 
     def validate(
         self,
@@ -53,6 +59,7 @@ class ActionPolicy:
             for element in sanitized_page_state.get("elements", [])
         }
         action_ids = set()
+        normalized_actions = []
         for action in action_plan["actions"]:
             action_type = action["action_type"]
             if action_type not in ALLOWED_ACTION_TYPES:
@@ -67,6 +74,7 @@ class ActionPolicy:
             self._check_strings(action)
             self._check_sensitive_literals(action)
 
+            target = None
             if action_type in TARGET_ACTION_TYPES:
                 target_id = action["target_element_id"]
                 target = elements.get(target_id)
@@ -75,7 +83,19 @@ class ActionPolicy:
                 if not target["visible"] or not target["enabled"]:
                     self._reject("Action target is not visible and enabled.")
 
-        return dict(action_plan)
+            risk_level, requires_confirmation = self._risk_classifier(action, target)
+            if risk_level == "HIGH" and not requires_confirmation:
+                requires_confirmation = True
+            if requires_confirmation and risk_level == "LOW":
+                risk_level = "MEDIUM"
+
+            normalized = dict(action)
+            normalized["risk_level"] = risk_level
+            if requires_confirmation:
+                normalized["requires_user_confirmation"] = True
+            normalized_actions.append(normalized)
+
+        return {**dict(action_plan), "actions": normalized_actions}
 
     @staticmethod
     def _reject(message: str) -> None:
