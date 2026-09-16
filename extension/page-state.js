@@ -72,9 +72,9 @@ function _isVisible(el) {
     if (style.visibility === "hidden") return false;
     if (style.opacity === "0") return false;
 
+    const root = current.getRootNode();
     current = current.parentElement;
     if (!current) {
-      const root = el.getRootNode();
       current = root && root.host ? root.host : null;
     }
   }
