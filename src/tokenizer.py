@@ -126,16 +126,29 @@ class PrivacyTokenizer:
     def sanitize_node(self, text: str, category_hint: str = None) -> Tuple[str, bool]:
         if not isinstance(text, str) or not text.strip():
             return text, False
-        matches = self._span_matches(text, category_hint=category_hint)
+
+        # Reuse values already detected elsewhere in the same PageState so a
+        # sensitive value embedded in a later title/URL/visible-text field is
+        # still protected even when the detector cannot classify the larger text.
+        working = text
+        reused = False
+        for raw_value, token in sorted(self.raw_to_token_map.items(), key=lambda item: len(item[0][1]), reverse=True):
+            raw = raw_value[1]
+            if raw and raw in working:
+                working = working.replace(raw, token)
+                reused = True
+
+        matches = self._span_matches(working, category_hint=category_hint)
         if not matches:
-            return text, False
+            return working, reused
+
         pieces: List[str] = []
         cursor = 0
         for start, end, category in matches:
-            token = self._generate_token(category, text[start:end])
-            pieces.extend((text[cursor:start], token))
+            token = self._generate_token(category, working[start:end])
+            pieces.extend((working[cursor:start], token))
             cursor = end
-        pieces.append(text[cursor:])
+        pieces.append(working[cursor:])
         return "".join(pieces), True
 
     @staticmethod
@@ -217,15 +230,13 @@ class PrivacyTokenizer:
         try:
             parts = urlsplit(value)
             if not parts.scheme or not parts.netloc:
-                sanitized, _ = self.sanitize_node(value)
-                return sanitized[:2048]
+                return self.sanitize_node(value)[0][:2048]
             hostname = parts.hostname or ""
             port = f":{parts.port}" if parts.port else ""
-            path, _ = self.sanitize_node(parts.path)
+            path = self.sanitize_node(parts.path)[0]
             return urlunsplit((parts.scheme, hostname + port, path, "", ""))[:2048]
         except ValueError:
-            sanitized, _ = self.sanitize_node(value)
-            return sanitized[:2048]
+            return self.sanitize_node(value)[0][:2048]
 
     def _sanitize_recursive(self, value: Any) -> Any:
         if isinstance(value, str):
@@ -259,7 +270,9 @@ class PrivacyTokenizer:
             if sanitized_element["sensitivity"] == "SENSITIVE_CONTEXT" or "MESSAGE" in categories:
                 sensitive_context_detected = True
 
+        raw_title = str(page_state.get("title", ""))
         raw_visible_text = str(page_state.get("visible_text", ""))
+        sanitized_title = self.sanitize_node(raw_title)[0]
         sanitized_visible_text, visible_modified = self.sanitize_node(raw_visible_text)
         if visible_modified:
             matches = self._span_matches(raw_visible_text)
@@ -279,7 +292,7 @@ class PrivacyTokenizer:
             "source_page_state_id": page_state["page_state_id"],
             "captured_at": page_state["captured_at"],
             "url": self._sanitize_url(str(page_state["url"])),
-            "title": self.sanitize_node(str(page_state.get("title", "")))[0],
+            "title": sanitized_title,
             "visible_text": sanitized_visible_text,
             "elements": sanitized_elements,
             "privacy_summary": {
