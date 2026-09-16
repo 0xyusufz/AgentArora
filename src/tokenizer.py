@@ -127,16 +127,16 @@ class PrivacyTokenizer:
         if not isinstance(text, str) or not text.strip():
             return text, False
 
-        # Reuse values already detected elsewhere in the same PageState so a
-        # sensitive value embedded in a later title/URL/visible-text field is
-        # still protected even when the detector cannot classify the larger text.
+        # In an unlabelled context, reuse tokens already discovered elsewhere in
+        # this PageState. A labelled field must instead re-run category-specific
+        # detection so the same raw value can legitimately map to PHONE vs ACCOUNT.
         working = text
         reused = False
-        for raw_value, token in sorted(self.raw_to_token_map.items(), key=lambda item: len(item[0][1]), reverse=True):
-            raw = raw_value[1]
-            if raw and raw in working:
-                working = working.replace(raw, token)
-                reused = True
+        if category_hint is None:
+            for (category, raw), token in sorted(self.raw_to_token_map.items(), key=lambda item: len(item[0][1]), reverse=True):
+                if raw and raw in working:
+                    working = working.replace(raw, token)
+                    reused = True
 
         matches = self._span_matches(working, category_hint=category_hint)
         if not matches:
