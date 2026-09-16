@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecureBank — Benchmark Page</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f0f4f8; color: #1a202c; }
+    header { background: #1a365d; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    nav { display: flex; gap: 8px; }
+    nav a { color: #bee3f8; text-decoration: none; padding: 6px 12px; border-radius: 4px; font-size: 0.9rem; }
+    main { max-width: 900px; margin: 32px auto; padding: 0 16px; }
+    .card { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    .field-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; max-width: 360px; }
+    .field-row label { font-size: 0.85rem; color: #4a5568; font-weight: 600; }
+    .field-row input, .field-row select, .field-row textarea { padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.9rem; }
+    .btn { padding: 8px 18px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+    .btn-primary { background: #3182ce; color: #fff; }
+    .btn-secondary { background: #e2e8f0; color: #2d3748; }
+    .btn-danger { background: #e53e3e; color: #fff; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; margin-bottom: 10px; }
+    footer { text-align: center; padding: 24px; color: #a0aec0; font-size: 0.8rem; }
+
+    /* Visibility test helpers */
+    #el-display-none    { display: none; }
+    #el-vis-hidden      { visibility: hidden; width: 120px; height: 36px; }
+    #el-opacity-zero    { opacity: 0; width: 120px; height: 36px; }
+    #el-zero-size       { width: 0; height: 0; padding: 0; border: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+
+<!-- ─── SECTION 1: Headings + Navigation ─────────────────────────────────── -->
+<header>
+  <!-- GT-01: implicit role heading from <h1> -->
+  <h1 id="el-h1">SecureBank Dashboard</h1>
+
+  <!-- GT-02: <nav> not in SELECTOR — marked extracted:false in ground truth -->
+  <nav id="el-nav" aria-label="Main navigation">
+    <!-- GT-03: link labelled by text content -->
+    <a href="#transactions" id="el-link-transactions">Transactions</a>
+    <!-- GT-04: link with aria-label overriding text -->
+    <a href="#profile" id="el-link-profile" aria-label="Go to Profile">Profile</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ─── SECTION 2: Label resolution cases ──────────────────────────────── -->
+  <div class="card">
+    <h2 id="el-h2-labels">Label Resolution Tests</h2>
+
+    <!-- GT-05: aria-label -->
+    <div class="field-row">
+      <input type="text" id="el-aria-label"
+             aria-label="Full Name"
+             placeholder="should be ignored" />
+    </div>
+
+    <!-- GT-06: aria-labelledby (two IDs joined) -->
+    <div class="field-row">
+      <span id="lbl-account-prefix">Account</span>
+      <span id="lbl-account-suffix">Number</span>
+      <input type="text" id="el-aria-labelledby"
+             aria-labelledby="lbl-account-prefix lbl-account-suffix" />
+    </div>
+
+    <!-- GT-07: <label for="..."> -->
+    <div class="field-row">
+      <label for="el-label-for">Email Address</label>
+      <input type="email" id="el-label-for" />
+    </div>
+
+    <!-- GT-08: wrapping <label> -->
+    <label class="field-row" style="display:flex;flex-direction:column;gap:6px;max-width:360px;margin-bottom:14px;">
+      <span>Date of Birth</span>
+      <input type="text" id="el-wrapping-label" />
+    </label>
+
+    <!-- GT-09: placeholder fallback (no label of any kind) -->
+    <div class="field-row">
+      <input type="text" id="el-placeholder-label"
+             placeholder="Search transactions" />
+    </div>
+
+    <!-- GT-10: title fallback (no label, no placeholder) -->
+    <div class="field-row">
+      <input type="text" id="el-title-label"
+             title="Reference Code" />
+    </div>
+
+    <!-- GT-11: unlabeled — no aria-label, no label, no placeholder, no title -->
+    <div class="field-row">
+      <input type="text" id="el-no-label" />
+    </div>
+
+    <!-- GT-30: aria-describedby fallback (no higher-priority label source) -->
+    <div class="field-row">
+      <span id="desc-sort-hint">Sort by date or amount</span>
+      <input type="text" id="el-aria-describedby"
+             aria-describedby="desc-sort-hint" />
+    </div>
+
+    <!-- GT-31: input[type=search] → searchbox role -->
+    <div class="field-row">
+      <input type="search" id="el-search-input"
+             aria-label="Search accounts" />
+    </div>
+  </div>
+
+  <!-- ─── SECTION 3: Interactive element roles ───────────────────────────── -->
+  <div class="card">
+    <h2 id="el-h2-roles">Role Tests</h2>
+
+    <!-- GT-12: implicit button -->
+    <button class="btn btn-primary" id="el-button" style="margin-right:8px;">Apply Filter</button>
+
+    <!-- GT-13: implicit link -->
+    <a href="#support" id="el-link-support" style="margin-right:16px;">Support</a>
+
+    <!-- GT-14: select → combobox -->
+    <div class="field-row" style="margin-top:14px;">
+      <label for="el-select">Category</label>
+      <select id="el-select">
+        <option value="">All</option>
+        <option value="food">Food</option>
+        <option value="travel">Travel</option>
+      </select>
+    </div>
+
+    <!-- GT-15: textarea → textbox -->
+    <div class="field-row">
+      <label for="el-textarea">Notes</label>
+      <textarea id="el-textarea" rows="3"></textarea>
+    </div>
+
+    <!-- GT-16: checkbox -->
+    <div class="checkbox-row">
+      <input type="checkbox" id="el-checkbox" />
+      <label for="el-checkbox">Show debits only</label>
+    </div>
+
+    <!-- GT-17: radio -->
+    <div class="checkbox-row">
+      <input type="radio" id="el-radio" name="period" value="month" />
+      <label for="el-radio">This month</label>
+    </div>
+
+    <!-- GT-18: <img> not in SELECTOR — marked extracted:false -->
+    <img id="el-img" src="" alt="Bank logo" width="40" height="40"
+         style="display:block;margin-top:8px;" />
+  </div>
+
+  <!-- ─── SECTION 4: Enabled / disabled ─────────────────────────────────── -->
+  <div class="card">
+    <h2 id="el-h2-enabled">Enabled State Tests</h2>
+
+    <!-- GT-19: enabled button -->
+    <button class="btn btn-primary" id="el-btn-enabled" style="margin-right:8px;">
+      Submit
+    </button>
+
+    <!-- GT-20: disabled via HTML attribute -->
+    <button class="btn btn-secondary" id="el-btn-disabled" disabled style="margin-right:8px;">
+      Export CSV
+    </button>
+
+    <!-- GT-21: disabled input -->
+    <div class="field-row" style="margin-top:14px;">
+      <label for="el-input-disabled">Account Number (read-only)</label>
+      <input type="text" id="el-input-disabled" value="XXXX-4821" disabled />
+    </div>
+
+    <!-- GT-22: aria-disabled="true" on a div[role=button] -->
+    <div role="button" id="el-aria-disabled"
+         aria-disabled="true"
+         aria-label="Locked Action"
+         style="display:inline-block;padding:8px 18px;background:#e2e8f0;border-radius:4px;margin-top:8px;cursor:not-allowed;">
+      Locked Action
+    </div>
+  </div>
+
+  <!-- ─── SECTION 5: Visibility cases ───────────────────────────────────── -->
+  <div class="card">
+    <h2 id="el-h2-visibility">Visibility Tests</h2>
+
+    <!-- GT-23: visible button -->
+    <button class="btn btn-primary" id="el-btn-visible" style="margin-bottom:12px;">
+      Visible Button
+    </button>
+
+    <!-- GT-24: display:none — invisible -->
+    <button id="el-display-none">Display None</button>
+
+    <!-- GT-25: visibility:hidden — invisible -->
+    <button id="el-vis-hidden">Visibility Hidden</button>
+
+    <!-- GT-26: opacity:0 — invisible -->
+    <button id="el-opacity-zero">Opacity Zero</button>
+
+    <!-- GT-27: zero-size — invisible (0×0) -->
+    <button id="el-zero-size">Zero Size</button>
+  </div>
+
+  <!-- ─── SECTION 6: Password protection ────────────────────────────────── -->
+  <div class="card">
+    <h2 id="el-h2-password">Password Protection Test</h2>
+
+    <!-- GT-28: password input — value must NEVER appear in PageState -->
+    <div class="field-row">
+      <label for="el-password">Current Password</label>
+      <input type="password" id="el-password"
+             value="SuperSecret123!" autocomplete="current-password" />
+    </div>
+
+    <!-- GT-29: change password button -->
+    <button class="btn btn-danger" id="el-btn-change-pwd">Change Password</button>
+  </div>
+
+  <!-- ─── SECTION 7: Day 2 — Native semantics + Shadow DOM ───────────────── -->
+  <div class="card">
+    <h2 id="el-h2-day2">Day 2 — Semantic &amp; Shadow DOM Tests</h2>
+
+    <!-- GT-32: <ul> → list role -->
+    <ul id="el-ul" style="margin:8px 0 12px 20px;">
+      <!-- GT-33: <li> → listitem role -->
+      <li id="el-li-first">Recent transaction 1</li>
+      <li>Recent transaction 2</li>
+    </ul>
+
+    <!-- GT-34: <article> → article role -->
+    <article id="el-article" style="border:1px solid #cbd5e0;border-radius:4px;padding:10px;margin-bottom:12px;">
+      <h3>Transaction Summary</h3>
+    </article>
+
+    <!-- GT-39: unnamed <section> → generic role -->
+    <section id="el-section-unnamed" style="margin-bottom:12px;">
+      <p>Unnamed section content</p>
+    </section>
+
+    <!-- GT-35: <section> → region role -->
+    <section id="el-section" aria-label="Quick Actions" style="margin-bottom:12px;">
+      <button class="btn btn-secondary" style="margin-right:8px;">Download</button>
+    </section>
+
+    <!-- GT-36: Shadow DOM host — open shadow root containing a button -->
+    <!-- The shadow button should be discovered by _collectElements() -->
+    <div id="el-shadow-host" style="margin-bottom:12px;"></div>
+
+    <!-- GT-37: <a> without href → generic role (not link) -->
+    <a id="el-anchor-no-href" style="color:#3182ce;cursor:pointer;">Anchor without href</a>
+
+    <!-- GT-38: broken aria-labelledby ref → falls through to placeholder -->
+    <div class="field-row">
+      <input type="text" id="el-broken-labelledby"
+             aria-labelledby="does-not-exist-id"
+             placeholder="Fallback placeholder" />
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <p>SecureBank © 2026 — Ground-Truth Benchmark Page (SIH 2026)</p>
+  <p style="color:#e53e3e;font-size:0.75rem;">⚠ FAKE DATA — For prototype testing only.</p>
+</footer>
+
+<script>
+  // Attach open shadow root to GT-36 host and add a labelled button inside it.
+  // This runs in the page's main world before document_idle fires.
+  (function () {
+    const host = document.getElementById("el-shadow-host");
+    if (!host) return;
+    const shadow = host.attachShadow({ mode: "open" });
+    const btn = document.createElement("button");
+    btn.id = "el-shadow-btn";
+    btn.setAttribute("aria-label", "Shadow Action");
+    btn.textContent = "Shadow Button";
+    btn.style.cssText = "padding:8px 18px;background:#805ad5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.9rem;font-weight:600;";
+    shadow.appendChild(btn);
+  })();
+</script>
+
+</body>
+</html>

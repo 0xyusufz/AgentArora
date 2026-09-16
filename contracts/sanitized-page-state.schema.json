@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-arora.local/contracts/sanitized-page-state.schema.json",
+  "title": "SanitizedPageState",
+  "description": "Sanitized page state produced by Member 2 and consumed by Member 3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sanitized_state_id",
+    "source_page_state_id",
+    "captured_at",
+    "url",
+    "title",
+    "visible_text",
+    "elements",
+    "privacy_summary"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "shared.schema.json#/$defs/schemaVersion" },
+    "sanitized_state_id": {
+      "type": "string",
+      "pattern": "^SPS_[A-Za-z0-9_-]{6,64}$"
+    },
+    "source_page_state_id": {
+      "type": "string",
+      "pattern": "^PS_[A-Za-z0-9_-]{6,64}$"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "url": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "visible_text": {
+      "type": "string",
+      "maxLength": 20000,
+      "description": "Sanitized visible text. Raw sensitive values must be replaced by placeholders or omitted."
+    },
+    "elements": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["element_id", "role", "visible", "enabled", "sensitivity"],
+        "properties": {
+          "element_id": { "$ref": "shared.schema.json#/$defs/opaqueElementId" },
+          "role": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "type": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "value": {
+            "type": ["string", "null"],
+            "maxLength": 2000,
+            "description": "Sanitized value only. Use placeholders for sensitive values; do not include original values."
+          },
+          "visible": { "type": "boolean" },
+          "enabled": { "type": "boolean" },
+          "bounds": { "$ref": "shared.schema.json#/$defs/bounds" },
+          "sensitivity": {
+            "type": "string",
+            "enum": ["NONE", "SENSITIVE_CONTEXT", "REDACTED"]
+          },
+          "redaction_placeholder": {
+            "type": ["string", "null"],
+            "pattern": "^\\[[A-Z0-9_]+(_[0-9]+)?\\]$"
+          }
+        }
+      }
+    },
+    "privacy_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sensitive_context_detected", "redaction_count", "categories", "verification_passed"],
+      "properties": {
+        "sensitive_context_detected": { "type": "boolean" },
+        "redaction_count": { "type": "integer", "minimum": 0 },
+        "categories": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["EMAIL", "PHONE", "ADDRESS", "PASSWORD", "PAYMENT", "NAME", "ACCOUNT", "MESSAGE", "OTHER"]
+          }
+        },
+        "verification_passed": { "type": "boolean" }
+      }
+    },
+    "accessibility_snapshot": {
+      "type": "string",
+      "maxLength": 20000
+    },
+    "visual_summary": {
+      "type": "string",
+      "maxLength": 5000
+    },
+    "error": { "$ref": "shared.schema.json#/$defs/errorDetail" }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-arora.local/contracts/shared.schema.json",
+  "title": "Shared Contract Definitions",
+  "description": "Shared definitions used by the Privacy-Preserving Browser Agent contracts.",
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "opaqueElementId": {
+      "type": "string",
+      "description": "Temporary opaque browser element identifier assigned by Member 1. Consumers must not infer semantics from it.",
+      "pattern": "^EL_[0-9]{3,6}$"
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 }
+      }
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": ["LOW", "MEDIUM", "HIGH"]
+    },
+    "actionType": {
+      "type": "string",
+      "enum": ["CLICK", "TYPE", "SCROLL", "SELECT", "PRESS_KEY", "WAIT"]
+    },
+    "errorDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "SCHEMA_VALIDATION_FAILED",
+            "PRIVACY_VIOLATION",
+            "POLICY_BLOCKED",
+            "STALE_ELEMENT",
+            "INVALID_ACTION",
+            "EXECUTION_FAILED",
+            "TIMEOUT",
+            "UNKNOWN"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Sanitized debug detail only. Must not include raw page secrets, credentials, cookies, tokens, or original PII values."
+        }
+      }
+    }
+  }
+}

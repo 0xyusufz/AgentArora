@@ -1,0 +1,156 @@
+{
+  "email": {
+    "positive": [
+      "rahul@gmail.com",
+      "student123@gmail.com",
+      "test.user@college.ac.in",
+      "arush.kumar@outlook.com",
+      "support@company.in",
+      "john_doe@yahoo.com",
+      "name+work@gmail.com",
+      "admin@mywebsite.org"
+    ],
+    "negative": [
+      "hello@gmail",
+      "user@",
+      "@gmail.com",
+      "gmail.com",
+      "email address",
+      "user.example.com"
+    ]
+  },
+  "phone": {
+    "positive": [
+      "9876543210",
+      "9123456789",
+      "+91 9876543210",
+      "+91-9876543210",
+      "+91 98765 43210",
+      "98765-43210",
+      "98765 43210",
+      "91-9876543210"
+    ],
+    "negative": [
+      "1234567890",
+      "987654320260914124",
+      "Order 9876543210",
+      "Product 9123456789",
+      "12345 67890"
+    ]
+  },
+  "name": {
+    "positive": [
+      "Rahul Sharma",
+      "Arush Kumar",
+      "Amit Patel",
+      "Priya Singh",
+      "Neha Verma",
+      "Rohan Das",
+      "Anjali Mishra",
+      "Vikram Mehta"
+    ],
+    "negative": [
+      "Amazon India",
+      "Google Chrome",
+      "Smart Banking",
+      "Order Summary",
+      "Privacy Settings",
+      "Student Portal"
+    ]
+  },
+  "address": {
+    "positive": [
+      "Bhadrak, Odisha",
+      "Bhubaneswar, Odisha",
+      "Plot 21, Patia, Bhubaneswar",
+      "123 MG Road, Bengaluru",
+      "Flat 402, Green Residency, Pune",
+      "Village Chandipur, Balasore, Odisha",
+      "12 Park Street, Kolkata",
+      "Sector 15, Noida, Uttar Pradesh"
+    ],
+    "negative": [
+      "Odisha",
+      "India",
+      "Bhubaneswar",
+      "Home Page",
+      "Shipping Address",
+      "Address Settings"
+    ]
+  },
+  "password": {
+    "positive": [
+      "Password: DemoPass123!",
+      "Enter password: Test@1234",
+      "Current password: Sample1234",
+      "New password: Demo@5678",
+      "Confirm password: Example@123",
+      "Password = TestPass99"
+    ],
+    "negative": [
+      "Password",
+      "Password required",
+      "Enter your password",
+      "Password must contain 8 characters",
+      "Forgot password?",
+      "Password settings"
+    ]
+  },
+  "payment": {
+    "positive": [
+      "₹84,250",
+      "₹2,340",
+      "Rs. 25,000",
+      "Rs 12,500",
+      "INR 84,250",
+      "₹1,299.50",
+      "Amount: ₹50,000",
+      "Balance: ₹9,850"
+    ],
+    "negative": [
+      "Page 25,000",
+      "Quantity: 25000",
+      "Distance: 25,000 km",
+      "Score: 84,250",
+      "ID: 843250",
+      "2026-09-14"
+    ]
+  },
+  "account": {
+    "positive": [
+      "7845129034",
+      "7845 1290 34",
+      "312345678901",
+      "Account No: 7845129034",
+      "A/C No: 4567891234",
+      "Bank Account: 9876543210",
+      "Account Number: 123456789012"
+    ],
+    "negative": [
+      "Order ID: 7845129034",
+      "Product ID: 1234567890",
+      "Invoice No: 7845129034",
+      "PIN Code: 756100",
+      "Year: 20260914",
+      "Reference: 1234567890"
+    ]
+  },
+  "message": {
+    "positive": [
+      "Hey Rahul, please send the bank details.",
+      "This is our private conversation.",
+      "Please keep this message confidential.",
+      "Meet me at 6 PM and don't tell anyone.",
+      "Your verification details are in my message.",
+      "Please reply to me privately."
+    ],
+    "negative": [
+      "Welcome to our website",
+      "Contact us for support",
+      "Terms and Conditions",
+      "Public announcement",
+      "Latest news and updates",
+      "Thank you for visiting"
+    ]
+  }
+}

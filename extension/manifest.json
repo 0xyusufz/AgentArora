@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Privacy-Preserving Browser Agent",
+  "version": "1.0.0",
+  "description": "Day 2 — Improved accessible-name resolution, implicit roles, shadow DOM traversal, diff engine.",
+  "permissions": ["tabs", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["page-state.js", "action-handler.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}
