@@ -186,7 +186,7 @@ class DynamicDOMTests(unittest.TestCase):
 
         self.assertIsNone(output.action_plan)
         self.assertEqual(output.action_result["status"], "BLOCKED_BY_POLICY")
-        self.assertIn("reused", output.action_result["error"]["message"])
+        self.assertEqual(output.action_result["error"]["code"], "POLICY_BLOCKED")
 
 
 if __name__ == "__main__":
