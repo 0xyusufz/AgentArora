@@ -83,3 +83,25 @@ These fixes preserve the existing payload shape and do not expose the local toke
   - **Contract impact:** None; token and summary values remain within the frozen schema.
   - **Integration impact:** Mismatched browser labels no longer cause avoidable Member 2-to-Member 3 processing failures when the value is otherwise supported.
   - **Known limitations:** Generic fallback is limited to existing tokenizer patterns and detector categories; it is not unlimited sensitive-data discovery.
+
+## Day 5 — Blocker Fixes / Authentication & Malformed URL Hardening
+
+- **Authentication credential values**
+  - **Reproduction:** `API key: abc123secret` previously became `[AUTH_01]: abc123secret`.
+  - **Previous behavior:** Authentication context was tokenized, but the value following supported labels such as `API key:` remained raw.
+  - **New behavior:** Explicit credential-value patterns for supported authentication labels (`API key`, `auth token`, `passcode`, `recovery code`, `verification code`, and `security answer`) tokenize the associated value while preserving authentication detection.
+  - **Functions changed:** `src/tokenizer.py`, authentication `CONTEXT_PATTERNS` and `_span_matches()`.
+  - **Tests added:** `test_authentication_credential_value_is_redacted()` verifies the raw credential is absent from the serialized sanitized payload.
+  - **Contract impact:** None. Existing token and summary categories remain within the frozen schema.
+  - **Integration impact:** Agent-facing sanitized state no longer contains the supported authentication credential value.
+  - **Remaining limitations:** Authentication matching remains limited to the explicitly supported labels and does not infer arbitrary secret formats.
+
+- **Malformed percent-encoded URL paths**
+  - **Reproduction:** `https://example.test/profile/%ZZRahul%20Sharma` previously became `https://example.test/profile/%25ZZRahul%20Sharma`, leaving `Rahul Sharma` raw.
+  - **Previous behavior:** Invalid percent triplets prevented the existing name detector from seeing the underlying path value.
+  - **New behavior:** Invalid percent triplets are converted to a path-safe delimiter before the existing bounded two-layer decode and sanitization pass. Valid encoding, path separators, URL structure, and query/fragment removal are preserved.
+  - **Functions changed:** `src/tokenizer.py`, `_decode_path_segment()` and `_sanitize_url()`.
+  - **Tests added:** `test_malformed_encoded_sensitive_url_path_is_redacted()` verifies both name components are absent and privacy verification passes.
+  - **Contract impact:** None. Sanitized URLs remain strings under the frozen contract.
+  - **Integration impact:** Supported sensitive values in malformed URL paths no longer reach Member 3 context.
+  - **Remaining limitations:** Decoding remains bounded and malformed input outside supported detector patterns is not classified as sensitive.

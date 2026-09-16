@@ -151,6 +151,27 @@ def test_double_encoded_sensitive_url_path_is_redacted():
     assert sanitized["privacy_summary"]["verification_passed"] is True
 
 
+def test_malformed_encoded_sensitive_url_path_is_redacted():
+    state = _url_only_state("https://example.test/profile/%ZZRahul%20Sharma")
+
+    sanitized = PrivacyEngine().sanitize(state)
+
+    assert "Rahul" not in sanitized["url"]
+    assert "Sharma" not in sanitized["url"]
+    assert sanitized["privacy_summary"]["verification_passed"] is True
+
+
+def test_authentication_credential_value_is_redacted():
+    state = _url_only_state("https://example.test/settings")
+    state["visible_text"] = "API key: abc123secret"
+
+    sanitized = PrivacyEngine().sanitize(state)
+    payload = json.dumps(sanitized).lower()
+
+    assert "abc123secret" not in payload
+    assert sanitized["privacy_summary"]["verification_passed"] is True
+
+
 def test_message_hint_handles_private_communication_phrases():
     for phrase in ("Please reply privately", "do not share this", "private conversation"):
         state = _url_only_state("https://example.test/messages")

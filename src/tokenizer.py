@@ -70,6 +70,10 @@ class PrivacyTokenizer:
         "ssn": re.compile(r"(?i)\b(?:ssn|social\s+security(?:\s+number)?)\s*[:=-]?\s*(?P<value>\d{3}[- ]?\d{2}[- ]?\d{4})"),
         "pan": re.compile(r"(?i)\b(?:pan|card\s+number|credit\s+card|debit\s+card)\s*[:=-]?\s*(?P<value>(?:(?:\d[ -]?){12,18}\d|(?:[*xX#]{4}[ -]?){3}\d{4}))"),
         "password": re.compile(r"(?i)\b(?:password|enter\s+password|current\s+password|new\s+password|confirm\s+password|otp)\s*[:=-]?\s*(?P<value>\S+)"),
+        "authentication": re.compile(
+            r"(?i)\b(?:api\s+key|auth\s+token|passcode|recovery\s+code|verification\s+code|security\s+answer)"
+            r"\s*[:=-]\s*(?P<value>\S+)"
+        ),
         "email": re.compile(r"(?i)\b(?:email|e-mail)\s*[:=-]\s*(?P<value>[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})"),
         "phone": re.compile(r"(?i)\b(?:phone|mobile|contact)\s*(?:number|no\.?)?\s*[:=-]\s*(?P<value>(?:\+?91[\-\s]?)?[6-9]\d{4}[\-\s]?\d{5})"),
         "medical": re.compile(r"(?i)\b(?:diagnosis|prescription|medication|symptoms?|blood\s+type|lab\s+result)\s*[:=-]\s*(?P<value>[^|\n]+)"),
@@ -133,7 +137,7 @@ class PrivacyTokenizer:
             if pattern:
                 for match in pattern.finditer(text):
                     value = match.group("value")
-                    detected_value = match.group(0) if cat in {"password", "medical"} else value
+                    detected_value = match.group(0) if cat in {"password", "medical", "authentication"} else value
                     if self._detected(cat, detected_value):
                         matches.append((match.start("value"), match.end("value"), cat))
 
@@ -315,7 +319,20 @@ class PrivacyTokenizer:
 
     @staticmethod
     def _decode_path_segment(value: str) -> str:
-        decoded = value
+        normalized = []
+        index = 0
+        while index < len(value):
+            if value[index] == "%" and (
+                index + 2 >= len(value)
+                or not re.fullmatch(r"[0-9A-Fa-f]{2}", value[index + 1:index + 3])
+            ):
+                normalized.append(" ")
+                index += min(3, len(value) - index)
+                continue
+            normalized.append(value[index])
+            index += 1
+
+        decoded = "".join(normalized)
         for _ in range(2):
             next_value = unquote(decoded)
             if next_value == decoded:
