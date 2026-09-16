@@ -36,11 +36,11 @@ class PrivacyEngine:
     def _independent_privacy_check(
         self, raw_page_state: Dict[str, Any], sanitized_state: Dict[str, Any]
     ) -> bool:
-        """Verify recognized sensitive spans from raw input are absent from output."""
+        """Verify detected sensitive spans and known mappings are absent from output."""
         sanitized_serialized = json.dumps(sanitized_state, ensure_ascii=False, sort_keys=True)
         detected_raw_values = set()
 
-        def walk(value: Any) -> None:
+        def collect(value: Any) -> None:
             if isinstance(value, str):
                 for start, end, _category in self.tokenizer._span_matches(value):
                     candidate = value[start:end]
@@ -48,14 +48,21 @@ class PrivacyEngine:
                         detected_raw_values.add(candidate)
                 return
             if isinstance(value, dict):
-                for child in value.values():
-                    walk(child)
+                # Keys are structural by contract, but checking them makes the
+                # verification defensive against malformed/raw nested inputs.
+                for key, child in value.items():
+                    if isinstance(key, str):
+                        for start, end, _category in self.tokenizer._span_matches(key):
+                            candidate = key[start:end]
+                            if candidate:
+                                detected_raw_values.add(candidate)
+                    collect(child)
                 return
             if isinstance(value, list):
                 for child in value:
-                    walk(child)
+                    collect(child)
 
-        walk(raw_page_state)
+        collect(raw_page_state)
         detected_raw_values.update(self.tokenizer.local_mapping.values())
         return all(raw_value not in sanitized_serialized for raw_value in detected_raw_values)
 
