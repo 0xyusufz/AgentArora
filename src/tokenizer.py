@@ -120,6 +120,8 @@ class PrivacyTokenizer:
         if not text:
             return []
         categories = [category_hint] if category_hint else list(self.CATEGORY_ORDER)
+        if category_hint == "message":
+            categories.append("private_communication")
         matches: List[Tuple[int, int, str]] = []
 
         for cat in categories:
@@ -294,8 +296,11 @@ class PrivacyTokenizer:
             hostname = parts.hostname or ""
             port = f":{parts.port}" if parts.port else ""
             decoded_path = unquote(parts.path)
-            path = self.sanitize_node(decoded_path)[0]
-            path = quote(path, safe="/@[]!$&'()*+,;=-._~")
+            path_segments = [
+                quote(self.sanitize_node(segment)[0], safe="@[]!$&'()*+,;=-._~")
+                for segment in decoded_path.split("/")
+            ]
+            path = "/".join(path_segments)
             return urlunsplit((parts.scheme, hostname + port, path, "", ""))[: self.MAX_URL]
         except ValueError:
             return self.sanitize_node(value)[0][: self.MAX_URL]

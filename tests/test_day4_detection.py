@@ -100,3 +100,79 @@ def test_sanitization_time_and_size_are_measured():
     assert elapsed_ms >= 0
     assert sanitized_size > 0
     assert raw_size > 0
+
+
+def _url_only_state(url):
+    return {
+        "schema_version": "1.0",
+        "page_state_id": "PS_urlbatch2",
+        "captured_at": "2026-09-16T00:00:00Z",
+        "url": url,
+        "title": "Profile",
+        "visible_text": "Profile",
+        "elements": [],
+    }
+
+
+def test_sensitive_url_path_segments_are_redacted_without_prior_mappings():
+    urls = (
+        "https://example.test/profile/Rahul%20Sharma",
+        "https://example.test/contact/rahul.sharma@example.com",
+        "https://example.test/account/7845129034/details",
+    )
+
+    for url in urls:
+        sanitized = PrivacyEngine().sanitize(_url_only_state(url))
+        assert "Rahul" not in sanitized["url"]
+        assert "rahul.sharma@example.com" not in sanitized["url"]
+        assert "7845129034" not in sanitized["url"]
+        assert sanitized["privacy_summary"]["verification_passed"] is True
+
+
+def test_url_query_and_fragment_are_removed_with_path_sanitization():
+    state = _url_only_state(
+        "https://example.test/profile/Rahul%20Sharma?email=rahul@example.com#account=7845129034"
+    )
+    sanitized = PrivacyEngine().sanitize(state)
+
+    assert sanitized["url"] == "https://example.test/profile/[PERSON_01]"
+    assert "?" not in sanitized["url"]
+    assert "#" not in sanitized["url"]
+
+
+def test_message_hint_handles_private_communication_phrases():
+    for phrase in ("Please reply privately", "do not share this", "private conversation"):
+        state = _url_only_state("https://example.test/messages")
+        state["visible_text"] = phrase
+        state["elements"] = [{
+            "element_id": "EL_001",
+            "role": "text",
+            "label": "Message",
+            "text": phrase,
+            "visible": True,
+            "enabled": True,
+        }]
+
+        sanitized = PrivacyEngine().sanitize(state)
+        payload = json.dumps(sanitized)
+        assert phrase.lower() not in payload.lower()
+        assert sanitized["privacy_summary"]["verification_passed"] is True
+
+
+def test_confidential_element_content_remains_schema_compatible():
+    state = _url_only_state("https://example.test/messages")
+    state["visible_text"] = "Confidential report"
+    state["elements"] = [{
+        "element_id": "EL_001",
+        "role": "text",
+        "label": "Confidential",
+        "text": "Confidential report",
+        "visible": True,
+        "enabled": True,
+    }]
+
+    sanitized = PrivacyEngine().sanitize(state)
+
+    assert "confidential report" not in json.dumps(sanitized).lower()
+    assert "CONFIDENTIAL" in sanitized["privacy_summary"]["categories"]
+    assert sanitized["privacy_summary"]["verification_passed"] is True
