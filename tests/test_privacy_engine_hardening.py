@@ -65,15 +65,15 @@ def test_same_raw_value_keeps_category_specific_tokens():
     account_value = sanitized["elements"][1]["value"]
     phone_value = sanitized["elements"][3]["value"]
     assert account_value.startswith("[ACCOUNT_")
-    assert phone_value.startswith("[PHONE_") or phone_value.startswith("[ACCOUNT_")
+    assert phone_value.startswith("[PHONE_")
     assert account_value != phone_value
 
 
 def test_independent_privacy_check_detects_unmapped_leak():
     engine = PrivacyEngine()
     raw = banking_state()
+    raw["title"] = "Rahul Sharma"
     sanitized = engine.tokenizer.sanitize_page_state(raw)
-    # Simulate a downstream mutation reintroducing a recognized raw value.
     sanitized["title"] = "Rahul Sharma"
     assert engine._independent_privacy_check(raw, sanitized) is False
 
