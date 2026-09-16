@@ -119,7 +119,11 @@ class PrivacyTokenizer:
     def _span_matches(self, text: str, category_hint: Optional[str] = None) -> List[Tuple[int, int, str]]:
         if not text:
             return []
-        categories = [category_hint] if category_hint else list(self.CATEGORY_ORDER)
+        categories = (
+            [category_hint] + [cat for cat in self.CATEGORY_ORDER if cat != category_hint]
+            if category_hint
+            else list(self.CATEGORY_ORDER)
+        )
         if category_hint == "message":
             categories.append("private_communication")
         matches: List[Tuple[int, int, str]] = []
@@ -172,6 +176,7 @@ class PrivacyTokenizer:
         matches.sort(
             key=lambda item: (
                 item[0],
+                0 if category_hint and item[2] == category_hint else 1,
                 self.MATCH_PRIORITY.get(item[2], 10),
                 -(item[1] - item[0]),
                 self.CATEGORY_ORDER.index(item[2]),
@@ -297,13 +302,26 @@ class PrivacyTokenizer:
             port = f":{parts.port}" if parts.port else ""
             decoded_path = unquote(parts.path)
             path_segments = [
-                quote(self.sanitize_node(segment)[0], safe="@[]!$&'()*+,;=-._~")
+                quote(
+                    self.sanitize_node(self._decode_path_segment(segment))[0],
+                    safe="@[]!$&'()*+,;=-._~",
+                )
                 for segment in decoded_path.split("/")
             ]
             path = "/".join(path_segments)
             return urlunsplit((parts.scheme, hostname + port, path, "", ""))[: self.MAX_URL]
         except ValueError:
             return self.sanitize_node(value)[0][: self.MAX_URL]
+
+    @staticmethod
+    def _decode_path_segment(value: str) -> str:
+        decoded = value
+        for _ in range(2):
+            next_value = unquote(decoded)
+            if next_value == decoded:
+                break
+            decoded = next_value
+        return decoded
 
     def _sanitize_recursive(self, value: Any, depth: int = 0) -> Any:
         if depth > self.MAX_NESTED_DEPTH:

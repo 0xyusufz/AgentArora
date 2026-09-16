@@ -140,6 +140,17 @@ def test_url_query_and_fragment_are_removed_with_path_sanitization():
     assert "#" not in sanitized["url"]
 
 
+def test_double_encoded_sensitive_url_path_is_redacted():
+    state = _url_only_state("https://example.test/profile/%2520Rahul%2520Sharma")
+
+    sanitized = PrivacyEngine().sanitize(state)
+
+    assert "Rahul" not in sanitized["url"]
+    assert "Sharma" not in sanitized["url"]
+    assert "Rahul%2520Sharma" not in sanitized["url"]
+    assert sanitized["privacy_summary"]["verification_passed"] is True
+
+
 def test_message_hint_handles_private_communication_phrases():
     for phrase in ("Please reply privately", "do not share this", "private conversation"):
         state = _url_only_state("https://example.test/messages")
@@ -157,6 +168,24 @@ def test_message_hint_handles_private_communication_phrases():
         payload = json.dumps(sanitized)
         assert phrase.lower() not in payload.lower()
         assert sanitized["privacy_summary"]["verification_passed"] is True
+
+
+def test_sensitive_email_is_redacted_under_name_label_hint():
+    state = _url_only_state("https://example.test/profile")
+    state["elements"] = [{
+        "element_id": "EL_001",
+        "role": "text",
+        "label": "Name",
+        "text": "rahul.sharma@example.com",
+        "visible": True,
+        "enabled": True,
+    }]
+
+    sanitized = PrivacyEngine().sanitize(state)
+
+    assert sanitized["elements"][0]["text"] == "[EMAIL_01]"
+    assert "rahul.sharma@example.com" not in json.dumps(sanitized).lower()
+    assert sanitized["privacy_summary"]["verification_passed"] is True
 
 
 def test_confidential_element_content_remains_schema_compatible():

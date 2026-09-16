@@ -61,3 +61,25 @@ These fixes preserve the existing payload shape and do not expose the local toke
   - **Contract impact:** None. Existing token and summary enum values remain compatible.
   - **Tests added:** Message label plus text combinations for `Please reply privately`, `do not share this`, and `private conversation`, plus confidential element content in `tests/test_day4_detection.py`.
   - **Remaining limitations:** Category detection remains rule-based and heuristic; no exhaustive private/confidential classification is claimed.
+
+## Day 4 — Batch 3 / URL & Category-Hint Hardening
+
+- **Double-encoded URL path values**
+  - **File/functions:** `src/tokenizer.py`, `_sanitize_url()` and `_decode_path_segment()`.
+  - **Previous behavior:** A path such as `/profile/%2520Rahul%2520Sharma` was decoded only once, leaving an encoded sensitive value available to the Agent-facing URL.
+  - **New behavior:** Each decoded path segment is decoded through a bounded two-layer pass before existing sensitive-value sanitization. URL structure and query/fragment removal remain unchanged.
+  - **Why this was a real issue:** A supported sensitive value could bypass path detection through an additional encoding layer.
+  - **Tests added:** Double-encoded person-name path coverage, including assertions that the raw value and encoded form are absent.
+  - **Contract impact:** None; the URL remains a string under the frozen SanitizedPageState contract.
+  - **Integration impact:** Member 3 receives the same URL structure without the exposed path value.
+  - **Known limitations:** Decoding is intentionally bounded and does not claim to handle arbitrary encoding depth or unknown secret formats.
+
+- **Category-hint mismatch**
+  - **File/function:** `src/tokenizer.py`, `_span_matches()` (used by `_sanitize_element()`).
+  - **Previous behavior:** A label hint such as `Name` could restrict matching to name spans even when the field value was an email, causing privacy verification to reject the whole state.
+  - **New behavior:** Hinted matching retains priority, then supported generic categories scan the remaining content; overlapping matches continue to be resolved by the existing span-selection logic.
+  - **Why this was a real issue:** A detectable sensitive value could cause a valid PageState to fail instead of producing a SanitizedPageState.
+  - **Tests added:** Email sanitization under a `Name` label/hint.
+  - **Contract impact:** None; token and summary values remain within the frozen schema.
+  - **Integration impact:** Mismatched browser labels no longer cause avoidable Member 2-to-Member 3 processing failures when the value is otherwise supported.
+  - **Known limitations:** Generic fallback is limited to existing tokenizer patterns and detector categories; it is not unlimited sensitive-data discovery.
