@@ -41,6 +41,12 @@ class PrivacyTokenizer:
         "phone": re.compile(r"(?i)\b(?:phone|mobile|contact)\s*(?:number|no\.?)?\s*[:=-]\s*(?P<value>(?:\+?91[\-\s]?)?[6-9]\d{4}[\-\s]?\d{5})"),
     }
 
+    MAX_ELEMENTS = 500
+    MAX_VISIBLE_TEXT = 20_000
+    MAX_TITLE = 300
+    MAX_URL = 2_048
+    MAX_NESTED_DEPTH = 8
+
     def __init__(self):
         self.detector = PrivacyDetector()
         self.token_map: Dict[str, str] = {}
@@ -49,7 +55,8 @@ class PrivacyTokenizer:
 
     @property
     def local_mapping(self) -> Dict[str, str]:
-        return self.token_map
+        """Return a defensive copy so callers cannot mutate sensitive local state."""
+        return dict(self.token_map)
 
     def _generate_token(self, category: str, raw_value: str) -> str:
         raw_key = raw_value.strip()
@@ -127,13 +134,10 @@ class PrivacyTokenizer:
         if not isinstance(text, str) or not text.strip():
             return text, False
 
-        # In an unlabelled context, reuse tokens already discovered elsewhere in
-        # this PageState. A labelled field must instead re-run category-specific
-        # detection so the same raw value can legitimately map to PHONE vs ACCOUNT.
         working = text
         reused = False
         if category_hint is None:
-            for (category, raw), token in sorted(self.raw_to_token_map.items(), key=lambda item: len(item[0][1]), reverse=True):
+            for (_, raw), token in sorted(self.raw_to_token_map.items(), key=lambda item: len(item[0][1]), reverse=True):
                 if raw and raw in working:
                     working = working.replace(raw, token)
                     reused = True
@@ -183,11 +187,12 @@ class PrivacyTokenizer:
             sanitized_label, modified = self.sanitize_node(raw_label, hint)
             sanitized["label"] = sanitized_label
             if modified:
-                for _, _, category in self._span_matches(raw_label, hint):
+                matches = self._span_matches(raw_label, hint)
+                redaction_count += len(matches)
+                for _, _, category in matches:
                     upper = category.upper()
                     if upper not in categories:
                         categories.append(upper)
-                    redaction_count += 1
                 placeholders.extend(token for token in self.token_map if token in sanitized_label and token not in placeholders)
 
         for field_name in ("text", "value"):
@@ -230,22 +235,38 @@ class PrivacyTokenizer:
         try:
             parts = urlsplit(value)
             if not parts.scheme or not parts.netloc:
-                return self.sanitize_node(value)[0][:2048]
+                return self.sanitize_node(value)[0][: self.MAX_URL]
             hostname = parts.hostname or ""
             port = f":{parts.port}" if parts.port else ""
             path = self.sanitize_node(parts.path)[0]
-            return urlunsplit((parts.scheme, hostname + port, path, "", ""))[:2048]
+            return urlunsplit((parts.scheme, hostname + port, path, "", ""))[: self.MAX_URL]
         except ValueError:
-            return self.sanitize_node(value)[0][:2048]
+            return self.sanitize_node(value)[0][: self.MAX_URL]
 
-    def _sanitize_recursive(self, value: Any) -> Any:
+    def _sanitize_recursive(self, value: Any, depth: int = 0) -> Any:
+        if depth > self.MAX_NESTED_DEPTH:
+            raise ValueError("nested privacy payload exceeds safe depth")
         if isinstance(value, str):
             return self.sanitize_node(value)[0]
         if isinstance(value, dict):
-            return {key: self._sanitize_recursive(child) for key, child in value.items()}
+            return {key: self._sanitize_recursive(child, depth + 1) for key, child in value.items()}
         if isinstance(value, list):
-            return [self._sanitize_recursive(child) for child in value]
+            return [self._sanitize_recursive(child, depth + 1) for child in value]
         return value
+
+    def _validate_input_bounds(self, page_state: Dict[str, Any]) -> None:
+        elements = page_state.get("elements")
+        visible_text = page_state.get("visible_text")
+        title = page_state.get("title")
+        url = page_state.get("url")
+        if not isinstance(elements, list) or len(elements) > self.MAX_ELEMENTS:
+            raise ValueError("PageState elements exceed safe limits")
+        if not isinstance(visible_text, str) or len(visible_text) > self.MAX_VISIBLE_TEXT:
+            raise ValueError("PageState visible_text exceeds safe limits")
+        if not isinstance(title, str) or len(title) > self.MAX_TITLE:
+            raise ValueError("PageState title exceeds safe limits")
+        if not isinstance(url, str) or len(url) > self.MAX_URL:
+            raise ValueError("PageState url exceeds safe limits")
 
     def sanitize_page_state(self, page_state: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(page_state, dict):
@@ -254,6 +275,7 @@ class PrivacyTokenizer:
         missing = [key for key in required if key not in page_state]
         if missing:
             raise ValueError(f"PageState missing required fields: {', '.join(missing)}")
+        self._validate_input_bounds(page_state)
 
         sanitized_elements: List[Dict[str, Any]] = []
         categories_seen: List[str] = []
@@ -261,6 +283,8 @@ class PrivacyTokenizer:
         sensitive_context_detected = False
 
         for element in page_state.get("elements", []):
+            if not isinstance(element, dict):
+                raise ValueError("PageState elements must be objects")
             sanitized_element, categories, count = self._sanitize_element(element)
             sanitized_elements.append(sanitized_element)
             redaction_count += count
@@ -270,10 +294,17 @@ class PrivacyTokenizer:
             if sanitized_element["sensitivity"] == "SENSITIVE_CONTEXT" or "MESSAGE" in categories:
                 sensitive_context_detected = True
 
-        raw_title = str(page_state.get("title", ""))
-        raw_visible_text = str(page_state.get("visible_text", ""))
-        sanitized_title = self.sanitize_node(raw_title)[0]
+        raw_title = page_state["title"]
+        raw_visible_text = page_state["visible_text"]
+        sanitized_title, title_modified = self.sanitize_node(raw_title)
         sanitized_visible_text, visible_modified = self.sanitize_node(raw_visible_text)
+        if title_modified:
+            matches = self._span_matches(raw_title)
+            redaction_count += len(matches)
+            for _, _, category in matches:
+                upper = category.upper()
+                if upper not in categories_seen:
+                    categories_seen.append(upper)
         if visible_modified:
             matches = self._span_matches(raw_visible_text)
             redaction_count += len(matches)
@@ -291,7 +322,7 @@ class PrivacyTokenizer:
             "sanitized_state_id": self._new_sanitized_state_id(),
             "source_page_state_id": page_state["page_state_id"],
             "captured_at": page_state["captured_at"],
-            "url": self._sanitize_url(str(page_state["url"])),
+            "url": self._sanitize_url(page_state["url"]),
             "title": sanitized_title,
             "visible_text": sanitized_visible_text,
             "elements": sanitized_elements,
@@ -313,7 +344,7 @@ class PrivacyTokenizer:
         return sanitized_state
 
     def _verify_no_original_values(self, sanitized_state_values: Dict[str, Any]) -> bool:
-        payload = json.dumps(sanitized_state_values, ensure_ascii=False)
+        payload = json.dumps(sanitized_state_values, ensure_ascii=False, sort_keys=True)
         return all(raw_value not in payload for raw_value in self.token_map.values())
 
     def restore_tokens(self, sanitized_text: str) -> str:
