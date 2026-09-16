@@ -1,8 +1,11 @@
 import json
 import re
 import secrets
+from datetime import datetime
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
+from pathlib import Path
 from typing import Dict, Tuple, List, Any, Optional
+from jsonschema import Draft202012Validator, FormatChecker, RefResolver
 from .detector import PrivacyDetector
 
 
@@ -77,6 +80,12 @@ class PrivacyTokenizer:
     MAX_TITLE = 300
     MAX_URL = 2_048
     MAX_NESTED_DEPTH = 8
+    CONTRACT_CATEGORIES = {
+        "EMAIL", "PHONE", "ADDRESS", "PASSWORD", "PAYMENT", "NAME", "ACCOUNT",
+        "MESSAGE", "FINANCIAL", "MEDICAL", "AUTHENTICATION", "PRIVATE_COMMUNICATION",
+        "CONFIDENTIAL", "OTHER",
+    }
+    MATCH_PRIORITY = {"pan": 0, "ssn": 1, "account": 2}
 
     def __init__(self):
         self.detector = PrivacyDetector()
@@ -158,7 +167,14 @@ class PrivacyTokenizer:
                         matches.append((start, end, cat))
                     break
 
-        matches.sort(key=lambda item: (item[0], item[1], self.CATEGORY_ORDER.index(item[2])))
+        matches.sort(
+            key=lambda item: (
+                item[0],
+                self.MATCH_PRIORITY.get(item[2], 10),
+                -(item[1] - item[0]),
+                self.CATEGORY_ORDER.index(item[2]),
+            )
+        )
         selected: List[Tuple[int, int, str]] = []
         for candidate in matches:
             if selected and candidate[0] < selected[-1][1]:
@@ -228,7 +244,7 @@ class PrivacyTokenizer:
                 matches = self._span_matches(raw_label, hint)
                 redaction_count += len(matches)
                 for _, _, category in matches:
-                    upper = category.upper()
+                    upper = self._contract_category(category)
                     if upper not in categories:
                         categories.append(upper)
                 placeholders.extend(token for token in self.token_map if token in sanitized_label and token not in placeholders)
@@ -246,7 +262,7 @@ class PrivacyTokenizer:
                 matches = self._span_matches(raw_text, hint)
                 redaction_count += len(matches)
                 for _, _, category in matches:
-                    upper = category.upper()
+                    upper = self._contract_category(category)
                     if upper not in categories:
                         categories.append(upper)
                 placeholders.extend(token for token in self.token_map if token in sanitized_text and token not in placeholders)
@@ -309,15 +325,68 @@ class PrivacyTokenizer:
         if not isinstance(url, str) or len(url) > self.MAX_URL:
             raise ValueError("PageState url exceeds safe limits")
 
+    @staticmethod
+    def _load_validator(schema_name: str) -> Draft202012Validator:
+        contracts_dir = Path(__file__).resolve().parent.parent / "contracts"
+        schemas = {
+            schema.name: json.loads(schema.read_text(encoding="utf-8"))
+            for schema in contracts_dir.glob("*.schema.json")
+        }
+        schema = schemas[schema_name]
+        return Draft202012Validator(
+            schema,
+            resolver=RefResolver.from_schema(schema, store=schemas),
+            format_checker=FormatChecker(),
+        )
+
+    @staticmethod
+    def _contract_category(category: str) -> str:
+        upper = category.upper()
+        return upper if upper in PrivacyTokenizer.CONTRACT_CATEGORIES else "OTHER"
+
+    def _validate_contract(self, value: Dict[str, Any], schema_name: str, message: str) -> None:
+        if list(self._load_validator(schema_name).iter_errors(value)):
+            raise ValueError(message)
+
+    @staticmethod
+    def _validate_captured_at(value: str) -> None:
+        if not isinstance(value, str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
+            value,
+        ):
+            raise ValueError("PageState failed contract validation")
+        try:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("PageState failed contract validation") from exc
+
+    def _validate_nested_depth(self, value: Any, depth: int = 0) -> None:
+        if depth > self.MAX_NESTED_DEPTH:
+            raise ValueError("nested privacy payload exceeds safe depth")
+        if isinstance(value, dict):
+            for child in value.values():
+                self._validate_nested_depth(child, depth + 1)
+        elif isinstance(value, list):
+            for child in value:
+                self._validate_nested_depth(child, depth + 1)
+
     def sanitize_page_state(self, page_state: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(page_state, dict):
             raise TypeError("page_state must be a dictionary")
+        self._validate_input_bounds(page_state)
+        self._validate_captured_at(page_state.get("captured_at"))
+        for key in ("accessibility_snapshot", "visual_summary", "error"):
+            if key in page_state:
+                self._validate_nested_depth(page_state[key])
+        self._validate_contract(
+            page_state,
+            "page-state.schema.json",
+            "PageState failed contract validation",
+        )
         required = ("schema_version", "page_state_id", "captured_at", "url", "title", "visible_text", "elements")
         missing = [key for key in required if key not in page_state]
         if missing:
             raise ValueError(f"PageState missing required fields: {', '.join(missing)}")
-        self._validate_input_bounds(page_state)
-
         sanitized_elements: List[Dict[str, Any]] = []
         categories_seen: List[str] = []
         redaction_count = 0
@@ -343,20 +412,20 @@ class PrivacyTokenizer:
             matches = self._span_matches(raw_title)
             redaction_count += len(matches)
             for _, _, category in matches:
-                upper = category.upper()
+                upper = self._contract_category(category)
                 if upper not in categories_seen:
                     categories_seen.append(upper)
         if visible_modified:
             matches = self._span_matches(raw_visible_text)
             redaction_count += len(matches)
             for _, _, category in matches:
-                upper = category.upper()
+                upper = self._contract_category(category)
                 if upper not in categories_seen:
                     categories_seen.append(upper)
         for category in ("message", "financial", "medical", "authentication", "private_communication", "confidential"):
             if self._detected(category, raw_visible_text):
                 sensitive_context_detected = True
-                upper = category.upper()
+                upper = self._contract_category(category)
                 if upper not in categories_seen:
                     categories_seen.append(upper)
 
@@ -384,6 +453,11 @@ class PrivacyTokenizer:
             sanitized_state["error"] = self._sanitize_recursive(page_state["error"])
 
         sanitized_state["privacy_summary"]["verification_passed"] = self._verify_no_original_values(sanitized_state)
+        self._validate_contract(
+            sanitized_state,
+            "sanitized-page-state.schema.json",
+            "SanitizedPageState failed contract validation",
+        )
         return sanitized_state
 
     def _verify_no_original_values(self, sanitized_state_values: Dict[str, Any]) -> bool:

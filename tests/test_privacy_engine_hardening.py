@@ -127,13 +127,20 @@ def test_sensitive_url_path_is_redacted_but_query_and_fragment_removed():
     assert "Rahul" not in sanitized["url"]
 
 
-def test_deep_nested_sensitive_strings_are_redacted():
+def test_optional_structural_fields_must_match_contract_types():
+    state = banking_state()
+    state["visual_summary"] = ["Rahul Sharma", {"details": "Contact rahul.sharma@gmail.com"}]
+    with pytest.raises(ValueError, match="PageState failed contract validation"):
+        PrivacyEngine().sanitize(state)
+
+
+def test_valid_optional_structural_fields_are_sanitized():
     state = banking_state()
     state["accessibility_snapshot"] = "Account holder Rahul Sharma, account 7845129034"
-    state["visual_summary"] = ["Rahul Sharma", {"details": "Contact rahul.sharma@gmail.com"}]
+    state["visual_summary"] = "Rahul Sharma dashboard"
     sanitized = PrivacyEngine().sanitize(state)
     payload = json.dumps(sanitized, ensure_ascii=False)
-    for value in ("Rahul Sharma", "7845129034", "rahul.sharma@gmail.com"):
+    for value in ("Rahul Sharma", "7845129034"):
         assert value not in payload
 
 
@@ -221,3 +228,62 @@ def test_sensitive_value_injected_after_sanitization_is_detected():
     sanitized = engine.tokenizer.sanitize_page_state(raw)
     sanitized["title"] = "Account 7845129034"
     assert engine._independent_privacy_check(raw, sanitized) is False
+
+
+def test_pan_match_takes_precedence_over_overlapping_account_match():
+    engine = PrivacyEngine()
+    state = banking_state()
+    state["visible_text"] = "Card number: 4111 1111 1111 1111"
+    state["elements"] = []
+
+    sanitized = engine.sanitize(state)
+
+    assert sanitized["visible_text"] == "Card number: [PAN_01]"
+    assert "4111" not in json.dumps(sanitized)
+    assert "OTHER" in sanitized["privacy_summary"]["categories"]
+    assert "PAN" not in sanitized["privacy_summary"]["categories"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("schema_version", "2.0"),
+        ("page_state_id", "invalid"),
+        ("captured_at", "not-a-date"),
+        ("url", ""),
+    ],
+)
+def test_invalid_page_state_contract_is_rejected(field, value):
+    state = banking_state()
+    state[field] = value
+    with pytest.raises(ValueError, match="PageState failed contract validation"):
+        PrivacyEngine().sanitize(state)
+
+
+def test_date_only_captured_at_is_rejected():
+    state = banking_state()
+    state["captured_at"] = "2026-09-16"
+    with pytest.raises(ValueError, match="PageState failed contract validation"):
+        PrivacyEngine().sanitize(state)
+
+
+def test_timezone_naive_captured_at_is_rejected():
+    state = banking_state()
+    state["captured_at"] = "2026-09-16T10:00:00"
+    with pytest.raises(ValueError, match="PageState failed contract validation"):
+        PrivacyEngine().sanitize(state)
+
+
+def test_invalid_element_shape_is_rejected_by_page_state_contract():
+    state = banking_state()
+    state["elements"][0]["unexpected"] = "value"
+    with pytest.raises(ValueError, match="PageState failed contract validation"):
+        PrivacyEngine().sanitize(state)
+
+
+def test_generated_sanitized_state_validates_against_frozen_contract():
+    from src.tokenizer import PrivacyTokenizer
+
+    state = PrivacyEngine().sanitize(banking_state())
+    validator = PrivacyTokenizer._load_validator("sanitized-page-state.schema.json")
+    assert list(validator.iter_errors(state)) == []

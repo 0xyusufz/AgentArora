@@ -44,7 +44,7 @@ def test_sensitive_context_metrics_and_false_negatives_are_explicit():
 def test_unusual_formatting_and_mixed_content_are_sanitized():
     engine = PrivacyEngine()
     state = {
-        "schema_version": "1.0", "page_state_id": "PS_day4", "captured_at": "2026-09-16T00:00:00Z",
+        "schema_version": "1.0", "page_state_id": "PS_day4001", "captured_at": "2026-09-16T00:00:00Z",
         "url": "https://example.test/records", "title": "Records",
         "visible_text": "Patient:\nRita Das | Keep this confidential | Result: normal",
         "elements": [{"element_id": "EL_001", "role": "text", "label": "Medical\tRecord", "text": "Prescription: amoxicillin", "visible": True, "enabled": True}],
